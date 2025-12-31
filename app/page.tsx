@@ -1123,7 +1123,7 @@ async function handleBatchUpload() {
                   />
                   <EnergyBar 
                     label="Pitch Variation" 
-                    score={displayResult.scores.energy?.pitch_variation || 0}
+                    score={displayResult.voice_tone?.pitch_variation || 0}
                     detail={displayResult.voice_tone?.label || ""}
                   />
                   <EnergyBar 
