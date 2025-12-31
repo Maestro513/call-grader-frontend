@@ -1,0 +1,25 @@
+:root{
+  /* Backgrounds */
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel2: #fafafa;
+  --border: #e5e5e5;
+
+  /* Text */
+  --text: #8a00c2;
+  --muted: rgba(138, 0, 194, 0.65);
+
+  /* Brand */
+  --brand: #8a00c2;
+  --brand2: #b44dff;
+
+  /* Status */
+  --good: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+}
+
+body{
+  background: var(--bg);
+  color: var(--text);
+}
