@@ -877,7 +877,7 @@ async function handleBatchUpload() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.open(`${API_BASE}/calls/${call_id}/pdf`, "_blank");
+                              window.open(`${API_BASE}/calls/${r.call_id}/pdf`, "_blank");
 
                             }}
                             style={{
