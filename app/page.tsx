@@ -145,7 +145,8 @@ type UploadResult = {
     empathy_phrases: number;
     interruptions: number;
     label: string;
-};
+  };  
+};    
 
 type ScoreFactor = {
   label: string;
