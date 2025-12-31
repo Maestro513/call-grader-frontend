@@ -294,7 +294,7 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
     factors.push({ label: "Review Request", impact: 2, type: "positive" });
   }
 
-  const fillerPenalty = Math.min(20, (scores.filler_total || 0) * 2);
+  const fillerPenalty = Math.min(10, (scores.filler_total || 0) * 1);
   if (fillerPenalty > 0) {
     factors.push({ label: `Filler Words (${scores.filler_total})`, impact: -fillerPenalty, type: "negative" });
   }
