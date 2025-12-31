@@ -137,6 +137,14 @@ type UploadResult = {
   talk_ratio: TalkRatio | null;
   talk_coaching: string[];
   filename?: string;
+  voice_tone?: { pitch_variation: number; label: string };
+  warmth?: {                                                 
+    score: number;
+    mirroring: number;
+    name_usage: number;
+    empathy_phrases: number;
+    interruptions: number;
+    label: string;
 };
 
 type ScoreFactor = {
