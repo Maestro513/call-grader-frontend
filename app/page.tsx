@@ -1137,7 +1137,7 @@ async function handleBatchUpload() {
                   />
                   <EnergyBar 
                     label="Warmth" 
-                    score={displayResult.scores.energy?.warmth_score || 0}
+                    score={displayResult.warmth?.score || 0}
                     detail={displayResult.warmth?.label || ""}
                   />
                 </div>
