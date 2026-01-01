@@ -243,12 +243,12 @@ function formatTime(seconds: number): string {
 function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: ScoreFactor[] } {
   const factors: ScoreFactor[] = [];
 
-  const questionBonus = Math.min(20, (scores.questions || 0) * 3);
+  const questionBonus = Math.min(16, (scores.questions || 0) * 2);
   if (questionBonus > 0) {
     factors.push({ label: `Discovery Questions (${scores.questions})`, impact: questionBonus, type: "positive" });
   }
 
-  const rebuttalBonus = Math.min(16, (scores.rebuttal_hits || 0) * 8);
+  const rebuttalBonus = Math.min(16, (scores.objections_handled || 0) * 4);
   if (rebuttalBonus > 0) {
     factors.push({ label: `Rebuttals (${scores.rebuttal_hits})`, impact: rebuttalBonus, type: "positive" });
   }
