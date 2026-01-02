@@ -391,13 +391,19 @@ export default function Home() {
     formData.append("rep_name", repName);
     formData.append("call_type", callType);
 
-    setStatus("Uploading / transcribing… (big files take a bit)");
+    setStatus("Uploading / transcribing with large-v2... this takes 5-10 minutes. Don't close this page!");
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minute timeout
+      
       const res = await fetch(`${API_BASE}/calls`, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const text = await res.text();
