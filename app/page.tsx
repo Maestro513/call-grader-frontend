@@ -291,10 +291,14 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
 
   if (scores.referral_asked) {
     factors.push({ label: "Referral Ask", impact: 3, type: "positive" });
+  } else {
+    factors.push({ label: "Referral Ask Missing", impact: -4, type: "negative" });
   }
 
   if (scores.review_requested) {
-    factors.push({ label: "Review Request", impact: 2, type: "positive" });
+    factors.push({ label: "Review Request", impact: 3, type: "positive" });
+  } else {
+    factors.push({ label: "Review Request Missing", impact: -4, type: "negative" });
   }
 
   const fillerPenalty = Math.min(10, (scores.filler_total || 0) * 1);
@@ -330,6 +334,12 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
   if (!scores.welcome_packet_asked) {
     factors.push({ label: "Welcome Packet Missing", impact: -4, type: "negative" });
   }
+
+  if (!scores.pen_paper_asked) {
+    factors.push({ label: "Pen and Paper Missing", impact: -6, type: "negative" });
+  }
+
+  
 
   const positiveFactors = factors.filter((f) => f.type === "positive").sort((a, b) => b.impact - a.impact);
   const negativeFactors = factors.filter((f) => f.type === "negative").sort((a, b) => a.impact - b.impact);
@@ -1049,7 +1059,7 @@ export default function Home() {
             {displayScoreFactors && (
               <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div style={{ background: "#eaffea", padding: 10, borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: "#2d6a2d", marginBottom: 6 }}>TOP 3 FACTORS</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#2d6a2d", marginBottom: 6 }}>POSITIVE FACTORS</div>
                   {displayScoreFactors.top.length > 0 ? (
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "#333" }}>
                       {displayScoreFactors.top.map((f, i) => (
@@ -1063,7 +1073,7 @@ export default function Home() {
                   )}
                 </div>
                 <div style={{ background: "#ffecec", padding: 10, borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: "#8b2d2d", marginBottom: 6 }}>BOTTOM 3 FACTORS</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: "#8b2d2d", marginBottom: 6 }}>NEGATIVE FACTORS</div>
                   {displayScoreFactors.bottom.length > 0 ? (
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "#333" }}>
                       {displayScoreFactors.bottom.map((f, i) => (
