@@ -421,7 +421,7 @@ export default function Home() {
       setStatus("Transcribing... this takes 5-10 minutes. Don't close this page!");
 
       let attempts = 0;
-      while (attempts < 200) {
+      while (attempts < 400) {
         await new Promise((r) => setTimeout(r, 3000));
         const pollRes = await fetch(`${API_BASE}/calls/${call_id}`);
         const data = await pollRes.json();
@@ -488,7 +488,7 @@ export default function Home() {
           // Poll for this file
           let attempts = 0;
           let done = false;
-          while (attempts < 200 && !done) {
+          while (attempts < 400 && !done) {
             await new Promise((r) => setTimeout(r, 3000));
             const pollRes = await fetch(`${API_BASE}/calls/${call_id}`);
             const data = await pollRes.json();
