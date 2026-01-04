@@ -1,9 +1,9 @@
 "use client";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
-
 import { useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
 type Scores = {
   score: number;
@@ -138,15 +138,15 @@ type UploadResult = {
   talk_coaching: string[];
   filename?: string;
   voice_tone?: { pitch_variation: number; label: string };
-  warmth?: {                                                 
+  warmth?: {
     score: number;
     mirroring: number;
     name_usage: number;
     empathy_phrases: number;
     interruptions: number;
     label: string;
-  };  
-};    
+  };
+};
 
 type ScoreFactor = {
   label: string;
@@ -169,8 +169,8 @@ function Badge({
   label: string;
   variant?: "good" | "bad" | "warn" | "neutral";
 }) {
-  const style: React.CSSProperties = useMemo(() => {
-    const base: React.CSSProperties = {
+  const style: CSSProperties = useMemo(() => {
+    const base: CSSProperties = {
       display: "inline-block",
       padding: "6px 10px",
       borderRadius: 999,
@@ -187,7 +187,7 @@ function Badge({
   return <span style={style}>{label}</span>;
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
       style={{
@@ -227,14 +227,12 @@ function EnergyBar({ label, score, detail }: { label: string; score: number; det
           }}
         />
       </div>
-      {detail && (
-        <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{detail}</div>
-      )}
+      {detail && <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>{detail}</div>}
     </div>
   );
 }
 
-function formatTime(seconds: number): string {
+function formatClock(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
@@ -323,12 +321,26 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
 
 function exportToCSV(results: UploadResult[]) {
   const headers = [
-    "Filename", "Rep Name", "Call Type", "Score", "SOA", "Benefits", "Intro",
-    "Healthcare Decisions", "Referral Ask", "Review Request", "Questions",
-    "Tie-downs", "Fillers", "Objections", "Rebuttals", "Energy", "Talk Ratio Agent %"
+    "Filename",
+    "Rep Name",
+    "Call Type",
+    "Score",
+    "SOA",
+    "Benefits",
+    "Intro",
+    "Healthcare Decisions",
+    "Referral Ask",
+    "Review Request",
+    "Questions",
+    "Tie-downs",
+    "Fillers",
+    "Objections",
+    "Rebuttals",
+    "Energy",
+    "Talk Ratio Agent %",
   ];
-  
-  const rows = results.map(r => [
+
+  const rows = results.map((r) => [
     r.filename || r.call_id,
     r.rep_name || "",
     r.call_type || "",
@@ -344,11 +356,11 @@ function exportToCSV(results: UploadResult[]) {
     r.scores.filler_total,
     r.scores.objection_hits,
     r.scores.rebuttal_hits,
-    r.scores.energy?.overall || "N/A",
-    r.talk_ratio?.agent_pct || "N/A"
+    r.scores.energy?.overall ?? "N/A",
+    r.talk_ratio?.agent_pct ?? "N/A",
   ]);
 
-  const csv = [headers, ...rows].map(row => row.join(",")).join("\n");
+  const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -359,7 +371,7 @@ function exportToCSV(results: UploadResult[]) {
 
 export default function Home() {
   const [mode, setMode] = useState<"single" | "batch">("single");
-  
+
   // Single upload state
   const [file, setFile] = useState<File | null>(null);
   const [repName, setRepName] = useState("");
@@ -370,7 +382,6 @@ export default function Home() {
   const [showTranscript, setShowTranscript] = useState(false);
 
   // Batch upload state
-// Batch upload state
   const [batchFiles, setBatchFiles] = useState<Array<{ file: File; repName: string; callType: string }>>([]);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -391,19 +402,13 @@ export default function Home() {
     formData.append("rep_name", repName);
     formData.append("call_type", callType);
 
-    setStatus("Uploading / transcribing with large-v2... this takes 5-10 minutes. Don't close this page!");
+    setStatus("Uploading...");
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 900000); // 15 minute timeout
-      
       const res = await fetch(`${API_BASE}/calls`, {
         method: "POST",
         body: formData,
-        signal: controller.signal,
       });
-      
-      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const text = await res.text();
@@ -412,21 +417,45 @@ export default function Home() {
         return;
       }
 
-      const data = (await res.json()) as UploadResult;
-      setResult(data);
-      setStatus("Done.");
+      const { call_id } = await res.json();
+      setStatus("Transcribing... this takes 5-10 minutes. Don't close this page!");
+
+      let attempts = 0;
+      while (attempts < 200) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const pollRes = await fetch(`${API_BASE}/calls/${call_id}`);
+        const data = await pollRes.json();
+
+        if (data.status === "processing") {
+          attempts++;
+          setStatus(`Processing... (${Math.floor(attempts * 3 / 60)}m ${(attempts * 3) % 60}s elapsed)`);
+          continue;
+        }
+
+        if (data.status === "error") {
+          setStatus("Processing failed");
+          setRawError(data.error);
+          return;
+        }
+
+        setResult(data);
+        setStatus("Done.");
+        return;
+      }
+
+      setStatus("Timeout - processing took too long");
     } catch (err: any) {
-      setStatus("Upload failed (network error). Is the backend running?");
+      setStatus("Failed (network error). Is the backend running?");
       setRawError(String(err));
     }
   }
 
-async function handleBatchUpload() {
+  async function handleBatchUpload() {
     if (batchFiles.length === 0) return;
 
     setIsProcessing(true);
     setSelectedResult(null);
-    
+
     const status: BatchStatus = {
       total: batchFiles.length,
       completed: 0,
@@ -437,7 +466,7 @@ async function handleBatchUpload() {
     setBatchStatus(status);
 
     for (const item of batchFiles) {
-      status.current = item.file.name;
+      status.current = `${item.file.name} (uploading)`;
       setBatchStatus({ ...status });
 
       const formData = new FormData();
@@ -454,9 +483,37 @@ async function handleBatchUpload() {
         if (!res.ok) {
           status.errors.push({ filename: item.file.name, error: `${res.status} ${res.statusText}` });
         } else {
-          const data = (await res.json()) as UploadResult;
-          data.filename = item.file.name;
-          status.results.push(data);
+          const { call_id } = await res.json();
+
+          // Poll for this file
+          let attempts = 0;
+          let done = false;
+          while (attempts < 200 && !done) {
+            await new Promise((r) => setTimeout(r, 3000));
+            const pollRes = await fetch(`${API_BASE}/calls/${call_id}`);
+            const data = await pollRes.json();
+
+            status.current = `${item.file.name} (${Math.floor(attempts * 3 / 60)}m ${(attempts * 3) % 60}s)`;
+            setBatchStatus({ ...status });
+
+            if (data.status === "processing") {
+              attempts++;
+              continue;
+            }
+
+            if (data.status === "error") {
+              status.errors.push({ filename: item.file.name, error: data.error });
+              done = true;
+            } else {
+              data.filename = item.file.name;
+              status.results.push(data);
+              done = true;
+            }
+          }
+
+          if (!done) {
+            status.errors.push({ filename: item.file.name, error: "Timeout" });
+          }
         }
       } catch (err: any) {
         status.errors.push({ filename: item.file.name, error: String(err) });
@@ -471,17 +528,6 @@ async function handleBatchUpload() {
     setIsProcessing(false);
   }
 
-  const scoreVariant =
-    result?.scores.score == null
-      ? "neutral"
-      : result.scores.score >= 80
-      ? "good"
-      : result.scores.score >= 60
-      ? "warn"
-      : "bad";
-
-  const scoreFactors = result ? calculateScoreFactors(result.scores) : null;
-  
   const displayResult = selectedResult || result;
   const displayScoreVariant =
     displayResult?.scores.score == null
@@ -514,12 +560,10 @@ async function handleBatchUpload() {
           borderBottom: "1px solid #e5e5e5",
         }}
       >
-       <img src="/logo.png" alt="Logo" width={170} height={170} />
+        <img src="/logo.png" alt="Logo" width={170} height={170} />
 
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: "#8a00c2" }}>
-            Sales Call Grader
-          </h1>
+          <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: "#8a00c2" }}>Sales Call Grader</h1>
           <p style={{ marginTop: 6, color: "#8a00c2", opacity: 0.65 }}>
             Upload an audio file. Get transcript + an explainable scorecard.
           </p>
@@ -634,7 +678,7 @@ async function handleBatchUpload() {
         </>
       )}
 
-     {/* Batch Upload Mode */}
+      {/* Batch Upload Mode */}
       {mode === "batch" && (
         <div style={{ marginTop: 18 }}>
           <label
@@ -654,18 +698,14 @@ async function handleBatchUpload() {
               multiple
               onChange={(e) => {
                 const files = Array.from(e.target.files || []);
-                setBatchFiles(files.map(f => ({ file: f, repName: "", callType: "" })));
+                setBatchFiles(files.map((f) => ({ file: f, repName: "", callType: "" })));
               }}
               style={{ display: "none" }}
             />
             <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-              {batchFiles.length > 0
-                ? `${batchFiles.length} files selected`
-                : "Click or drag audio files here"}
+              {batchFiles.length > 0 ? `${batchFiles.length} files selected` : "Click or drag audio files here"}
             </div>
-            <div style={{ fontSize: 12, color: "#666" }}>
-              Supports .mp3, .wav, .m4a, .ogg
-            </div>
+            <div style={{ fontSize: 12, color: "#666" }}>Supports .mp3, .wav, .m4a, .ogg</div>
           </label>
 
           {/* File List with Editable Fields */}
@@ -678,7 +718,7 @@ async function handleBatchUpload() {
                     onClick={() => {
                       const name = prompt("Set rep name for all files:");
                       if (name !== null) {
-                        setBatchFiles(batchFiles.map(f => ({ ...f, repName: name })));
+                        setBatchFiles(batchFiles.map((f) => ({ ...f, repName: name })));
                       }
                     }}
                     style={{
@@ -697,7 +737,7 @@ async function handleBatchUpload() {
                     onClick={() => {
                       const type = prompt("Set call type for all files:");
                       if (type !== null) {
-                        setBatchFiles(batchFiles.map(f => ({ ...f, callType: type })));
+                        setBatchFiles(batchFiles.map((f) => ({ ...f, callType: type })));
                       }
                     }}
                     style={{
@@ -797,10 +837,10 @@ async function handleBatchUpload() {
           {batchStatus && (
             <div style={{ marginTop: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontWeight: 700 }}>Progress: {batchStatus.completed} / {batchStatus.total}</span>
-                {batchStatus.current && (
-                  <span style={{ color: "#666" }}>Processing: {batchStatus.current}</span>
-                )}
+                <span style={{ fontWeight: 700 }}>
+                  Progress: {batchStatus.completed} / {batchStatus.total}
+                </span>
+                {batchStatus.current && <span style={{ color: "#666" }}>Processing: {batchStatus.current}</span>}
               </div>
               <div style={{ width: "100%", background: "#e5e5e5", borderRadius: 999, height: 12 }}>
                 <div
@@ -877,7 +917,13 @@ async function handleBatchUpload() {
                         <td style={{ padding: 10, textAlign: "center" }}>
                           <Badge
                             label={r.scores.benefits_status}
-                            variant={r.scores.benefits_status === "full" ? "good" : r.scores.benefits_status === "partial" ? "warn" : "bad"}
+                            variant={
+                              r.scores.benefits_status === "full"
+                                ? "good"
+                                : r.scores.benefits_status === "partial"
+                                ? "warn"
+                                : "bad"
+                            }
                           />
                         </td>
                         <td style={{ padding: 10, textAlign: "center" }}>
@@ -887,13 +933,12 @@ async function handleBatchUpload() {
                           />
                         </td>
                         <td style={{ padding: 10, textAlign: "center" }}>{r.scores.energy?.overall || "N/A"}</td>
-                        <td style={{ padding: 10, textAlign: "center" }}>{r.talk_ratio?.agent_pct || "N/A"}%</td>
+                        <td style={{ padding: 10, textAlign: "center" }}>{r.talk_ratio ? `${r.talk_ratio.agent_pct}%` : "N/A"}</td>
                         <td style={{ padding: 10, textAlign: "center" }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(`${API_BASE}/calls/${r.call_id}/pdf`, "_blank");
-
                             }}
                             style={{
                               padding: "4px 8px",
@@ -920,7 +965,9 @@ async function handleBatchUpload() {
                   <strong style={{ color: "#c00" }}>Errors ({batchStatus.errors.length}):</strong>
                   <ul style={{ margin: "8px 0 0 0", paddingLeft: 20 }}>
                     {batchStatus.errors.map((e, i) => (
-                      <li key={i}>{e.filename}: {e.error}</li>
+                      <li key={i}>
+                        {e.filename}: {e.error}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -933,7 +980,6 @@ async function handleBatchUpload() {
       {/* Results Detail View */}
       {displayResult && (
         <div style={{ marginTop: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          
           {selectedResult && (
             <div style={{ gridColumn: "1 / -1", marginBottom: 8 }}>
               <button
@@ -949,9 +995,7 @@ async function handleBatchUpload() {
               >
                 ← Back to table
               </button>
-              <span style={{ marginLeft: 12, fontWeight: 700 }}>
-                Viewing: {selectedResult.filename || selectedResult.call_id}
-              </span>
+              <span style={{ marginLeft: 12, fontWeight: 700 }}>Viewing: {selectedResult.filename || selectedResult.call_id}</span>
             </div>
           )}
 
@@ -961,10 +1005,14 @@ async function handleBatchUpload() {
               <div style={{ fontSize: 56, fontWeight: 950, lineHeight: 1 }}>{displayResult.scores.score}</div>
               <div style={{ flex: 1 }}>
                 <Badge label={`Score tier: ${displayScoreVariant.toUpperCase()}`} variant={displayScoreVariant as any} />
-                
+
                 <div style={{ marginTop: 12, color: "#444", fontSize: 12 }}>
-                  <div><strong>Call ID:</strong> {displayResult.call_id}</div>
-                  <div><strong>Rep:</strong> {displayResult.rep_name || "—"} | <strong>Type:</strong> {displayResult.call_type || "—"}</div>
+                  <div>
+                    <strong>Call ID:</strong> {displayResult.call_id}
+                  </div>
+                  <div>
+                    <strong>Rep:</strong> {displayResult.rep_name || "—"} | <strong>Type:</strong> {displayResult.call_type || "—"}
+                  </div>
                 </div>
 
                 <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -984,7 +1032,9 @@ async function handleBatchUpload() {
                   {displayScoreFactors.top.length > 0 ? (
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "#333" }}>
                       {displayScoreFactors.top.map((f, i) => (
-                        <li key={i}>{f.label} <span style={{ color: "#2d6a2d" }}>+{f.impact}</span></li>
+                        <li key={i}>
+                          {f.label} <span style={{ color: "#2d6a2d" }}>+{f.impact}</span>
+                        </li>
                       ))}
                     </ul>
                   ) : (
@@ -996,7 +1046,9 @@ async function handleBatchUpload() {
                   {displayScoreFactors.bottom.length > 0 ? (
                     <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "#333" }}>
                       {displayScoreFactors.bottom.map((f, i) => (
-                        <li key={i}>{f.label} <span style={{ color: "#8b2d2d" }}>{f.impact}</span></li>
+                        <li key={i}>
+                          {f.label} <span style={{ color: "#8b2d2d" }}>{f.impact}</span>
+                        </li>
                       ))}
                     </ul>
                   ) : (
@@ -1007,7 +1059,7 @@ async function handleBatchUpload() {
             )}
 
             <button
-              onClick={() => window.open(`https://helene-unexcepted-nondialectally.ngrok-free.dev/calls/${displayResult.call_id}/pdf`, '_blank')}
+              onClick={() => window.open(`${API_BASE}/calls/${displayResult.call_id}/pdf`, "_blank")}
               style={{
                 marginTop: 16,
                 padding: "10px 20px",
@@ -1062,9 +1114,7 @@ async function handleBatchUpload() {
                   </div>
                 </div>
 
-                <div style={{ fontSize: 12, color: "#666" }}>
-                  Total duration: {displayResult.talk_ratio.total_seconds}s
-                </div>
+                <div style={{ fontSize: 12, color: "#666" }}>Total duration: {formatClock(displayResult.talk_ratio.total_seconds)}</div>
 
                 {displayResult.talk_coaching && displayResult.talk_coaching.length > 0 && (
                   <div style={{ marginTop: 8, padding: 8, background: "#f5f5f5", borderRadius: 8, fontSize: 12 }}>
@@ -1099,53 +1149,46 @@ async function handleBatchUpload() {
                   <div style={{ fontSize: 52, fontWeight: 950, lineHeight: 1 }}>{displayResult.scores.energy.overall}</div>
                   <Badge
                     label={displayResult.scores.energy.label}
-                    variant={
-                      displayResult.scores.energy.overall >= 75 ? "good" :
-                      displayResult.scores.energy.overall >= 50 ? "neutral" : "warn"
-                    }
+                    variant={displayResult.scores.energy.overall >= 75 ? "good" : displayResult.scores.energy.overall >= 50 ? "neutral" : "warn"}
                   />
                 </div>
-                
+
                 <div style={{ flex: 1 }}>
-                  <EnergyBar 
-                    label="Speech Pace" 
-                    score={displayResult.scores.energy.speech_pace.score} 
+                  <EnergyBar
+                    label="Speech Pace"
+                    score={displayResult.scores.energy.speech_pace.score}
                     detail={`${displayResult.scores.energy.speech_pace.words_per_sec} words/sec • ${displayResult.scores.energy.speech_pace.label}`}
                   />
-                  <EnergyBar 
-                    label="Enthusiasm" 
+                  <EnergyBar
+                    label="Enthusiasm"
                     score={displayResult.scores.energy.enthusiasm.score}
-                    detail={displayResult.scores.energy.enthusiasm.words_found.length > 0 
-                      ? `Found: ${displayResult.scores.energy.enthusiasm.words_found.slice(0, 5).join(", ")}` 
-                      : "No enthusiasm words detected"}
+                    detail={
+                      displayResult.scores.energy.enthusiasm.words_found.length > 0
+                        ? `Found: ${displayResult.scores.energy.enthusiasm.words_found.slice(0, 5).join(", ")}`
+                        : "No enthusiasm words detected"
+                    }
                   />
-                  <EnergyBar 
-                    label="Confidence" 
+                  <EnergyBar
+                    label="Confidence"
                     score={displayResult.scores.energy.confidence.score}
-                    detail={displayResult.scores.energy.confidence.words_found.length > 0 
-                      ? `Found: ${displayResult.scores.energy.confidence.words_found.slice(0, 5).join(", ")}` 
-                      : "No confidence words detected"}
+                    detail={
+                      displayResult.scores.energy.confidence.words_found.length > 0
+                        ? `Found: ${displayResult.scores.energy.confidence.words_found.slice(0, 5).join(", ")}`
+                        : "No confidence words detected"
+                    }
                   />
-                  <EnergyBar 
-                    label="Engagement" 
+                  <EnergyBar
+                    label="Engagement"
                     score={displayResult.scores.energy.engagement.score}
                     detail={`${displayResult.scores.energy.engagement.questions} questions asked`}
                   />
-                  <EnergyBar 
-                    label="Variation" 
+                  <EnergyBar
+                    label="Variation"
                     score={displayResult.scores.energy.variation.score}
                     detail={`Sentence length std dev: ${displayResult.scores.energy.variation.std_dev}`}
                   />
-                  <EnergyBar 
-                    label="Pitch Variation" 
-                    score={displayResult.voice_tone?.pitch_variation || 0}
-                    detail={displayResult.voice_tone?.label || ""}
-                  />
-                  <EnergyBar 
-                    label="Warmth" 
-                    score={displayResult.warmth?.score || 0}
-                    detail={displayResult.warmth?.label || ""}
-                  />
+                  <EnergyBar label="Pitch Variation" score={displayResult.voice_tone?.pitch_variation || 0} detail={displayResult.voice_tone?.label || ""} />
+                  <EnergyBar label="Warmth" score={displayResult.warmth?.score || 0} detail={displayResult.warmth?.label || ""} />
                 </div>
               </div>
 
@@ -1153,7 +1196,8 @@ async function handleBatchUpload() {
                 <div style={{ marginTop: 12, padding: 10, background: "#fff6e5", borderRadius: 8, fontSize: 12, border: "1px solid #f1d39a" }}>
                   <strong style={{ color: "#92400e" }}>⚠️ Hedge Word Penalty: -{displayResult.scores.energy.hedge_penalty.score}</strong>
                   <div style={{ marginTop: 4, color: "#666" }}>
-                    Found {displayResult.scores.energy.hedge_penalty.count}x: {displayResult.scores.energy.hedge_penalty.words_found.slice(0, 8).join(", ")}
+                    Found {displayResult.scores.energy.hedge_penalty.count}x:{" "}
+                    {displayResult.scores.energy.hedge_penalty.words_found.slice(0, 8).join(", ")}
                   </div>
                 </div>
               )}
@@ -1177,10 +1221,7 @@ async function handleBatchUpload() {
                   <div style={{ fontSize: 52, fontWeight: 950, lineHeight: 1 }}>{displayResult.voice_tone.pitch_variation}</div>
                   <Badge
                     label={displayResult.voice_tone.label}
-                    variant={
-                      displayResult.voice_tone.pitch_variation >= 70 ? "good" :
-                      displayResult.voice_tone.pitch_variation >= 50 ? "neutral" : "warn"
-                    }
+                    variant={displayResult.voice_tone.pitch_variation >= 70 ? "good" : displayResult.voice_tone.pitch_variation >= 50 ? "neutral" : "warn"}
                   />
                 </div>
                 <div style={{ flex: 1, fontSize: 13, color: "#666" }}>
@@ -1199,22 +1240,19 @@ async function handleBatchUpload() {
                   <div style={{ fontSize: 52, fontWeight: 950, lineHeight: 1 }}>{displayResult.warmth.score}</div>
                   <Badge
                     label={displayResult.warmth.label}
-                    variant={
-                      displayResult.warmth.score >= 70 ? "good" :
-                      displayResult.warmth.score >= 50 ? "neutral" : "warn"
-                    }
+                    variant={displayResult.warmth.score >= 70 ? "good" : displayResult.warmth.score >= 50 ? "neutral" : "warn"}
                   />
                 </div>
-                
+
                 <div style={{ flex: 1 }}>
-                  <EnergyBar 
-                    label="Mirroring" 
-                    score={displayResult.warmth.mirroring} 
-                    detail="Repeating customer's words"
-                  />
+                  <EnergyBar label="Mirroring" score={displayResult.warmth.mirroring} detail="Repeating customer's words" />
                   <div style={{ marginTop: 12, fontSize: 12 }}>
-                    <div><strong>Name Usage:</strong> {displayResult.warmth.name_usage}x</div>
-                    <div><strong>Empathy Phrases:</strong> {displayResult.warmth.empathy_phrases}x</div>
+                    <div>
+                      <strong>Name Usage:</strong> {displayResult.warmth.name_usage}x
+                    </div>
+                    <div>
+                      <strong>Empathy Phrases:</strong> {displayResult.warmth.empathy_phrases}x
+                    </div>
                     <div style={{ color: displayResult.warmth.interruptions > 0 ? "#c00" : "#666" }}>
                       <strong>Interruptions:</strong> {displayResult.warmth.interruptions}x
                     </div>
@@ -1228,97 +1266,65 @@ async function handleBatchUpload() {
           <Card title="Call Timeline">
             <div style={{ maxHeight: 400, overflowY: "auto" }}>
               {(() => {
-                // Collect all timestamped events
-                const events: Array<{time: number; type: string; detail: string}> = [];
+                const events: Array<{ time: number; type: string; detail: string }> = [];
                 const evidence = displayResult.scores.evidence;
-                
-                evidence?.soa?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "SOA", detail: e.text
-                }));
-                evidence?.intro?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: `Intro: ${e.component}`, detail: e.text
-                }));
-                evidence?.healthcare_decisions?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Healthcare Decisions", detail: e.text
-                }));
-                evidence?.referral?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Referral Ask", detail: e.text
-                }));
-                evidence?.review?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Review Request", detail: e.text
-                }));
-                evidence?.objections?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Objection", detail: `"${e.phrase}" - ${e.text}`
-                }));
-                evidence?.rebuttals?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Rebuttal", detail: `"${e.phrase}" - ${e.text}`
-                }));
-                evidence?.tie_downs?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Tie-down", detail: `"${e.phrase}"`
-                }));
-                evidence?.benefits?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Benefit", detail: `${e.term}`
-                }));
-                evidence?.pauses?.forEach((e: any) => events.push({
-                  time: e.timestamp, type: "Pause", detail: `${e.duration}s pause`
-                }));
-                
-                // Sort by timestamp
+
+                evidence?.soa?.forEach((e: any) => events.push({ time: e.timestamp, type: "SOA", detail: e.text }));
+                evidence?.intro?.forEach((e: any) => events.push({ time: e.timestamp, type: `Intro: ${e.component}`, detail: e.text }));
+                evidence?.healthcare_decisions?.forEach((e: any) => events.push({ time: e.timestamp, type: "Healthcare Decisions", detail: e.text }));
+                evidence?.referral?.forEach((e: any) => events.push({ time: e.timestamp, type: "Referral Ask", detail: e.text }));
+                evidence?.review?.forEach((e: any) => events.push({ time: e.timestamp, type: "Review Request", detail: e.text }));
+                evidence?.objections?.forEach((e: any) => events.push({ time: e.timestamp, type: "Objection", detail: `"${e.phrase}" - ${e.text}` }));
+                evidence?.rebuttals?.forEach((e: any) => events.push({ time: e.timestamp, type: "Rebuttal", detail: `"${e.phrase}" - ${e.text}` }));
+                evidence?.tie_downs?.forEach((e: any) => events.push({ time: e.timestamp, type: "Tie-down", detail: `"${e.phrase}"` }));
+                evidence?.benefits?.forEach((e: any) => events.push({ time: e.timestamp, type: "Benefit", detail: `${e.term}` }));
+                evidence?.pauses?.forEach((e: any) => events.push({ time: e.timestamp, type: "Pause", detail: `${e.duration}s pause` }));
+
                 events.sort((a, b) => a.time - b.time);
-                
+
                 if (events.length === 0) {
                   return <div style={{ color: "#666", fontSize: 13 }}>No timestamped events found.</div>;
                 }
-                
-                const formatTime = (secs: number) => {
-                  const m = Math.floor(secs / 60);
-                  const s = Math.floor(secs % 60);
-                  return `${m}:${s.toString().padStart(2, "0")}`;
-                };
-                
+
                 const typeColors: Record<string, string> = {
-                  "SOA": "#22c55e",
-                  "Objection": "#ef4444",
-                  "Rebuttal": "#22c55e",
-                  "Pause": "#eab308",
+                  SOA: "#22c55e",
+                  Objection: "#ef4444",
+                  Rebuttal: "#22c55e",
+                  Pause: "#eab308",
                   "Tie-down": "#8a00c2",
-                  "Benefit": "#3b82f6",
+                  Benefit: "#3b82f6",
                   "Healthcare Decisions": "#22c55e",
                   "Referral Ask": "#8a00c2",
                   "Review Request": "#8a00c2",
                 };
-                
+
                 return events.map((e, i) => (
-                  <div key={i} style={{
-                    display: "flex",
-                    gap: 12,
-                    padding: "8px 0",
-                    borderBottom: "1px solid #eee",
-                    fontSize: 12,
-                  }}>
-                    <div style={{
-                      fontWeight: 700,
-                      fontFamily: "monospace",
-                      color: "#666",
-                      minWidth: 50,
-                    }}>
-                      {formatTime(e.time)}
-                    </div>
-                    <div style={{
-                      background: typeColors[e.type] || "#888",
-                      color: "white",
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      minWidth: 80,
-                      textAlign: "center",
-                    }}>
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      padding: "8px 0",
+                      borderBottom: "1px solid #eee",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontFamily: "monospace", color: "#666", minWidth: 50 }}>{formatClock(e.time)}</div>
+                    <div
+                      style={{
+                        background: typeColors[e.type] || "#888",
+                        color: "white",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        minWidth: 80,
+                        textAlign: "center",
+                      }}
+                    >
                       {e.type}
                     </div>
-                    <div style={{ flex: 1, color: "#333" }}>
-                      {e.detail}
-                    </div>
+                    <div style={{ flex: 1, color: "#333" }}>{e.detail}</div>
                   </div>
                 ));
               })()}
@@ -1330,10 +1336,7 @@ async function handleBatchUpload() {
             <div style={{ display: "grid", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Intro</span>
-                <Badge
-                  label={displayResult.scores.intro?.status?.toUpperCase() || "N/A"}
-                  variant={displayResult.scores.intro?.status === "full" ? "good" : displayResult.scores.intro?.status === "partial" ? "warn" : "bad"}
-                />
+                <Badge label={displayResult.scores.intro?.status?.toUpperCase() || "N/A"} variant={displayResult.scores.intro?.status === "full" ? "good" : displayResult.scores.intro?.status === "partial" ? "warn" : "bad"} />
               </div>
               {displayResult.scores.intro?.missing && displayResult.scores.intro.missing.length > 0 && (
                 <div style={{ fontSize: 11, color: "#666", marginTop: -6, paddingLeft: 8 }}>
@@ -1343,26 +1346,17 @@ async function handleBatchUpload() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Healthcare Decisions</span>
-                <Badge
-                  label={displayResult.scores.healthcare_decisions_asked ? "ASKED" : "NOT ASKED"}
-                  variant={displayResult.scores.healthcare_decisions_asked ? "good" : "bad"}
-                />
+                <Badge label={displayResult.scores.healthcare_decisions_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.healthcare_decisions_asked ? "good" : "bad"} />
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>SOA (Scope of Appointment)</span>
-                <Badge
-                  label={displayResult.scores.soa_mentioned ? "MENTIONED" : "MISSING"}
-                  variant={displayResult.scores.soa_mentioned ? "good" : "bad"}
-                />
+                <Badge label={displayResult.scores.soa_mentioned ? "MENTIONED" : "MISSING"} variant={displayResult.scores.soa_mentioned ? "good" : "bad"} />
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Benefits Review</span>
-                <Badge
-                  label={displayResult.scores.benefits_status?.toUpperCase() || "NONE"}
-                  variant={displayResult.scores.benefits_status === "full" ? "good" : displayResult.scores.benefits_status === "partial" ? "warn" : "bad"}
-                />
+                <Badge label={displayResult.scores.benefits_status?.toUpperCase() || "NONE"} variant={displayResult.scores.benefits_status === "full" ? "good" : displayResult.scores.benefits_status === "partial" ? "warn" : "bad"} />
               </div>
               {displayResult.scores.benefit_terms_missing && displayResult.scores.benefit_terms_missing.length > 0 && (
                 <div style={{ fontSize: 11, color: "#666", marginTop: -6, paddingLeft: 8 }}>
@@ -1372,18 +1366,12 @@ async function handleBatchUpload() {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Referral Ask</span>
-                <Badge
-                  label={displayResult.scores.referral_asked ? "ASKED" : "NOT ASKED"}
-                  variant={displayResult.scores.referral_asked ? "good" : "neutral"}
-                />
+                <Badge label={displayResult.scores.referral_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.referral_asked ? "good" : "neutral"} />
               </div>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Review Request</span>
-                <Badge
-                  label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"}
-                  variant={displayResult.scores.review_requested ? "good" : "neutral"}
-                />
+                <Badge label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.review_requested ? "good" : "neutral"} />
               </div>
             </div>
           </Card>
