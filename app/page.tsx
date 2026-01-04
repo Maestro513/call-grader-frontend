@@ -28,6 +28,11 @@ type Scores = {
   healthcare_decisions_asked?: boolean;
   referral_asked?: boolean;
   review_requested?: boolean;
+  medicare_card_script?: boolean;
+  old_new_script?: boolean;
+  welcome_packet_asked?: boolean;
+  filler_density?: number;
+  filler_penalty?: number;
 
   word_count: number;
   questions: number;
@@ -310,6 +315,22 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
     factors.push({ label: `Missed Objections (${scores.objections_missed})`, impact: -missedPenalty, type: "negative" });
   }
 
+  if (scores.medicare_card_script) {
+    factors.push({ label: "Medicare Card Script", impact: 3, type: "positive" });
+  } else {
+    factors.push({ label: "Medicare Card Script Missing", impact: -3, type: "negative" });
+  }
+
+  if (scores.old_new_script) {
+    factors.push({ label: "Old/New Comparison", impact: 4, type: "positive" });
+  } else {
+    factors.push({ label: "Old/New Comparison Missing", impact: -4, type: "negative" });
+  }
+
+  if (!scores.welcome_packet_asked) {
+    factors.push({ label: "Welcome Packet Missing", impact: -4, type: "negative" });
+  }
+  
   const positiveFactors = factors.filter((f) => f.type === "positive").sort((a, b) => b.impact - a.impact);
   const negativeFactors = factors.filter((f) => f.type === "negative").sort((a, b) => a.impact - b.impact);
 
@@ -1372,6 +1393,21 @@ export default function Home() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Review Request</span>
                 <Badge label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.review_requested ? "good" : "neutral"} />
+              </div>
+            
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Medicare Card Script</span>
+                <Badge label={displayResult.scores.medicare_card_script ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.medicare_card_script ? "good" : "bad"} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Old/New Comparison</span>
+                <Badge label={displayResult.scores.old_new_script ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.old_new_script ? "good" : "bad"} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Welcome Packet</span>
+                <Badge label={displayResult.scores.welcome_packet_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.welcome_packet_asked ? "good" : "bad"} />
               </div>
             </div>
           </Card>
