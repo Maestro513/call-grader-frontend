@@ -330,13 +330,13 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
   if (!scores.welcome_packet_asked) {
     factors.push({ label: "Welcome Packet Missing", impact: -4, type: "negative" });
   }
-  
+
   const positiveFactors = factors.filter((f) => f.type === "positive").sort((a, b) => b.impact - a.impact);
   const negativeFactors = factors.filter((f) => f.type === "negative").sort((a, b) => a.impact - b.impact);
 
   return {
-    top: positiveFactors.slice(0, 3),
-    bottom: negativeFactors.slice(0, 3),
+    top: positiveFactors,
+    bottom: negativeFactors,
   };
 }
 
