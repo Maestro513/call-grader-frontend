@@ -246,100 +246,118 @@ function formatClock(seconds: number): string {
 function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: ScoreFactor[] } {
   const factors: ScoreFactor[] = [];
 
-  const questionBonus = Math.min(16, (scores.questions || 0) * 2);
-  if (questionBonus > 0) {
-    factors.push({ label: `Discovery Questions (${scores.questions})`, impact: questionBonus, type: "positive" });
+  // === TECHNIQUE BONUSES ===
+  
+  const questions = scores.questions || 0;
+  if (questions >= 8) {
+    factors.push({ label: `Questions (${questions})`, impact: 5, type: "positive" });
+  } else if (questions >= 5) {
+    factors.push({ label: `Questions (${questions})`, impact: 3, type: "positive" });
   }
 
-  const rebuttalBonus = Math.min(16, (scores.objections_handled || 0) * 4);
-  if (rebuttalBonus > 0) {
-    factors.push({ label: `Rebuttals (${scores.rebuttal_hits})`, impact: rebuttalBonus, type: "positive" });
+  const tieDowns = scores.tie_downs || 0;
+  if (tieDowns >= 4) {
+    factors.push({ label: `Tie-downs (${tieDowns})`, impact: 3, type: "positive" });
+  } else if (tieDowns >= 2) {
+    factors.push({ label: `Tie-downs (${tieDowns})`, impact: 2, type: "positive" });
   }
 
-  const tiedownBonus = Math.min(10, (scores.tie_downs || 0) * 2);
-  if (tiedownBonus > 0) {
-    factors.push({ label: `Tie-downs (${scores.tie_downs})`, impact: tiedownBonus, type: "positive" });
+  const handled = scores.objections_handled || 0;
+  if (handled >= 2) {
+    factors.push({ label: `Objections Handled (${handled})`, impact: 3, type: "positive" });
+  } else if (handled >= 1) {
+    factors.push({ label: `Objections Handled (${handled})`, impact: 2, type: "positive" });
   }
 
-  if (scores.soa_mentioned) {
-    factors.push({ label: "SOA Mentioned", impact: 8, type: "positive" });
-  } else {
-    factors.push({ label: "SOA Missing", impact: -20, type: "negative" });
+  const energyOverall = scores.energy?.overall || 50;
+  if (energyOverall >= 75) {
+    factors.push({ label: `High Energy (${energyOverall})`, impact: 10, type: "positive" });
+  } else if (energyOverall >= 60) {
+    factors.push({ label: `Good Energy (${energyOverall})`, impact: 5, type: "positive" });
+  } else if (energyOverall < 50) {
+    factors.push({ label: `Low Energy (${energyOverall})`, impact: -5, type: "negative" });
   }
 
-  if (scores.benefits_status === "full") {
-    factors.push({ label: "Full Benefits Review", impact: 8, type: "positive" });
-  } else if (scores.benefits_status === "partial") {
-    factors.push({ label: "Partial Benefits Review", impact: -10, type: "negative" });
-  } else {
-    factors.push({ label: "No Benefits Review", impact: -20, type: "negative" });
+  // === COMPLIANCE PENALTIES (expected items - only penalize if missing) ===
+
+  if (!scores.soa_mentioned) {
+    factors.push({ label: "SOA Missing", impact: -15, type: "negative" });
   }
 
-  if (scores.intro) {
-    if (scores.intro.status === "full") {
-      factors.push({ label: "Complete Intro", impact: 5, type: "positive" });
-    } else if (scores.intro.status === "partial") {
-      factors.push({ label: "Incomplete Intro", impact: -5, type: "negative" });
-    } else {
-      factors.push({ label: "Missing Intro", impact: -10, type: "negative" });
-    }
+  if (scores.intro?.status === "partial") {
+    factors.push({ label: `Incomplete Intro (missing: ${scores.intro.missing?.join(", ")})`, impact: -5, type: "negative" });
+  } else if (scores.intro?.status === "none") {
+    factors.push({ label: "Missing Intro", impact: -10, type: "negative" });
   }
 
-  if (scores.healthcare_decisions_asked) {
-    factors.push({ label: "Healthcare Decisions Asked", impact: 3, type: "positive" });
+  if (scores.benefits_status === "partial") {
+    factors.push({ label: `Partial Benefits Review (missing: ${scores.benefit_terms_missing?.join(", ")})`, impact: -8, type: "negative" });
+  } else if (scores.benefits_status === "none") {
+    factors.push({ label: "No Benefits Review", impact: -15, type: "negative" });
   }
 
-  if (scores.referral_asked) {
-    factors.push({ label: "Referral Ask", impact: 3, type: "positive" });
-  } else {
-    factors.push({ label: "Referral Ask Missing", impact: -4, type: "negative" });
+  if (!scores.healthcare_decisions_asked) {
+    factors.push({ label: "Healthcare Decisions Missing", impact: -5, type: "negative" });
   }
 
-  if (scores.review_requested) {
-    factors.push({ label: "Review Request", impact: 3, type: "positive" });
-  } else {
+  if (!scores.referral_asked) {
+    factors.push({ label: "Referral Ask Missing", impact: -5, type: "negative" });
+  }
+
+  if (!scores.review_requested) {
     factors.push({ label: "Review Request Missing", impact: -4, type: "negative" });
   }
 
-  const fillerPenalty = Math.min(10, (scores.filler_total || 0) * 1);
-  if (fillerPenalty > 0) {
-    factors.push({ label: `Filler Words (${scores.filler_total})`, impact: -fillerPenalty, type: "negative" });
+  if (!scores.medicare_card_script) {
+    factors.push({ label: "Medicare Card Script Missing", impact: -5, type: "negative" });
   }
 
-  if (scores.avg_sentence_words > 22) {
-    factors.push({ label: "Rambling Sentences", impact: -5, type: "negative" });
-  }
-
-  if (scores.pauses && scores.pauses.long_pauses > 2) {
-    factors.push({ label: `Long Pauses (${scores.pauses.long_pauses})`, impact: -5, type: "negative" });
-  }
-
-  if (scores.objections_missed && scores.objections_missed > 0) {
-    const missedPenalty = Math.min(10, scores.objections_missed * 5);
-    factors.push({ label: `Missed Objections (${scores.objections_missed})`, impact: -missedPenalty, type: "negative" });
-  }
-
-  if (scores.medicare_card_script) {
-    factors.push({ label: "Medicare Card Script", impact: 3, type: "positive" });
-  } else {
-    factors.push({ label: "Medicare Card Script Missing", impact: -3, type: "negative" });
-  }
-
-  if (scores.old_new_script) {
-    factors.push({ label: "Old/New Comparison", impact: 4, type: "positive" });
-  } else {
-    factors.push({ label: "Old/New Comparison Missing", impact: -4, type: "negative" });
-  }
-
-  if (!scores.welcome_packet_asked) {
-    factors.push({ label: "Welcome Packet Missing", impact: -4, type: "negative" });
+  if (!scores.old_new_script) {
+    factors.push({ label: "Old/New Comparison Missing", impact: -6, type: "negative" });
   }
 
   if (!scores.pen_paper_asked) {
     factors.push({ label: "Pen and Paper Missing", impact: -6, type: "negative" });
   }
 
-  
+  if (!scores.welcome_packet_asked) {
+    factors.push({ label: "Welcome Packet Missing", impact: -5, type: "negative" });
+  }
+
+  // === OTHER PENALTIES ===
+
+  const fillerDensity = scores.filler_density || 0;
+  if (fillerDensity >= 2) {
+    factors.push({ label: `Filler Words (${scores.filler_total}, ${fillerDensity}% density)`, impact: -8, type: "negative" });
+  } else if (fillerDensity >= 1) {
+    factors.push({ label: `Filler Words (${scores.filler_total}, ${fillerDensity}% density)`, impact: -5, type: "negative" });
+  } else if (fillerDensity >= 0.5) {
+    factors.push({ label: `Filler Words (${scores.filler_total}, ${fillerDensity}% density)`, impact: -3, type: "negative" });
+  }
+
+  const hedgeDensity = scores.energy?.hedge_penalty?.density || 0;
+  if (hedgeDensity >= 3) {
+    factors.push({ label: `Hedge Words (${hedgeDensity}% density)`, impact: -5, type: "negative" });
+  } else if (hedgeDensity >= 2) {
+    factors.push({ label: `Hedge Words (${hedgeDensity}% density)`, impact: -3, type: "negative" });
+  }
+
+  const badPauses = scores.pauses?.bad_pauses || 0;
+  if (badPauses > 3) {
+    factors.push({ label: `Bad Pauses (${badPauses})`, impact: -5, type: "negative" });
+  } else if (badPauses > 2) {
+    factors.push({ label: `Bad Pauses (${badPauses})`, impact: -3, type: "negative" });
+  }
+
+  const missed = scores.objections_missed || 0;
+  if (missed > 0) {
+    const penalty = Math.min(6, missed * 3);
+    factors.push({ label: `Missed Objections (${missed})`, impact: -penalty, type: "negative" });
+  }
+
+  if (scores.avg_sentence_words > 22) {
+    factors.push({ label: "Rambling Sentences", impact: -3, type: "negative" });
+  }
 
   const positiveFactors = factors.filter((f) => f.type === "positive").sort((a, b) => b.impact - a.impact);
   const negativeFactors = factors.filter((f) => f.type === "negative").sort((a, b) => a.impact - b.impact);
