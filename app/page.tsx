@@ -76,6 +76,7 @@ type Scores = {
     hedge_penalty: {
       score: number;
       words_found: string[];
+      density: number;
       count: number;
     };
     variation: {
