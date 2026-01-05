@@ -86,7 +86,8 @@ type Scores = {
   pauses?: {
     total_pauses: number;
     total_pause_time: number;
-    long_pauses: number;
+    bad_pauses: number;
+    good_pauses: number;
     avg_pause: number;
   };
 
@@ -1254,8 +1255,8 @@ export default function Home() {
               {displayResult.scores.pauses && displayResult.scores.pauses.total_pauses > 0 && (
                 <div style={{ marginTop: 12, padding: 10, background: "#f5f5f5", borderRadius: 8, fontSize: 12 }}>
                   <strong>Pauses (5s+):</strong> {displayResult.scores.pauses.total_pauses} pauses, {displayResult.scores.pauses.total_pause_time}s total
-                  {displayResult.scores.pauses.long_pauses > 0 && (
-                    <span style={{ color: "#c00" }}> ({displayResult.scores.pauses.long_pauses} long pauses 8s+)</span>
+                  {displayResult.scores.pauses.bad_pauses > 0 && (
+                    <span style={{ color: "#c00" }}> ({displayResult.scores.pauses.bad_pauses} bad pauses)</span>
                   )}
                 </div>
               )}
