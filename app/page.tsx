@@ -28,6 +28,7 @@ type Scores = {
   healthcare_decisions_asked?: boolean;
   referral_asked?: boolean;
   review_requested?: boolean;
+  pen_paper_asked?: boolean;
   medicare_card_script?: boolean;
   old_new_script?: boolean;
   welcome_packet_asked?: boolean;
