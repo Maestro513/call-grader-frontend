@@ -344,13 +344,13 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
   }
 
   if (scores.intro?.status === "partial") {
-    factors.push({ label: `Incomplete Intro (missing: ${scores.intro.missing?.join(", ")})`, impact: -5, type: "negative" });
+    factors.push({ label: "Incomplete Intro", impact: -5, type: "negative" });
   } else if (scores.intro?.status === "none") {
     factors.push({ label: "Missing Intro", impact: -10, type: "negative" });
   }
 
   if (scores.benefits_status === "partial") {
-    factors.push({ label: `Partial Benefits Review (missing: ${scores.benefit_terms_missing?.join(", ")})`, impact: -8, type: "negative" });
+    factors.push({ label: "Partial Benefits Review", impact: -8, type: "negative" });
   } else if (scores.benefits_status === "none") {
     factors.push({ label: "No Benefits Review", impact: -15, type: "negative" });
   }
@@ -404,12 +404,6 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
     factors.push({ label: `Bad Pauses (${badPauses})`, impact: -5, type: "negative" });
   } else if (badPauses > 2) {
     factors.push({ label: `Bad Pauses (${badPauses})`, impact: -3, type: "negative" });
-  }
-
-  const missed = scores.objections_missed || 0;
-  if (missed > 0) {
-    const penalty = Math.min(6, missed * 3);
-    factors.push({ label: `Missed Objections (${missed})`, impact: -penalty, type: "negative" });
   }
 
   if (scores.avg_sentence_words > 22) {
@@ -1633,6 +1627,30 @@ export default function Home() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Review Request</span>
                 <Badge label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.review_requested ? "good" : "neutral"} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Security Code</span>
+                <Badge 
+                  label={displayResult.script_analysis?.comparison?.post_enrollment?.security_code?.passed ? "ASKED" : "NOT ASKED"} 
+                  variant={displayResult.script_analysis?.comparison?.post_enrollment?.security_code?.passed ? "good" : "bad"} 
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Save Number</span>
+                <Badge 
+                  label={displayResult.script_analysis?.comparison?.post_enrollment?.save_number?.passed ? "ASKED" : "NOT ASKED"} 
+                  variant={displayResult.script_analysis?.comparison?.post_enrollment?.save_number?.passed ? "good" : "neutral"} 
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Follow-up Call</span>
+                <Badge 
+                  label={displayResult.script_analysis?.comparison?.post_enrollment?.follow_up_call?.passed ? "MENTIONED" : "NOT MENTIONED"} 
+                  variant={displayResult.script_analysis?.comparison?.post_enrollment?.follow_up_call?.passed ? "good" : "neutral"} 
+                />
               </div>
             </div>
           </Card>
