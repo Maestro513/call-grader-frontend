@@ -5,6 +5,64 @@ import type { CSSProperties, ReactNode } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
+// === NEW: Script Analysis Types ===
+type FillerLocation = {
+  filler: string;
+  timestamp: number;
+  timestamp_formatted: string;
+  speaker: string;
+  context: string;
+  full_segment: string;
+  is_always_filler: boolean;
+};
+
+type ScriptCoachingItem = {
+  category: string;
+  issue: string;
+  expected: string;
+  agent_said: string;
+  priority: "critical" | "high" | "medium" | "low";
+};
+
+type ScriptAnalysis = {
+  comparison: {
+    intro: Record<string, any>;
+    discovery: Record<string, any>;
+    benefits: {
+      status: string;
+      coverage_percent: number;
+      covered: string[];
+      missed: string[];
+      covered_count: number;
+      total_count: number;
+    };
+    close: Record<string, any>;
+    post_enrollment: Record<string, any>;
+    overall: {
+      script_adherence_percent: number;
+      items_passed: number;
+      items_total: number;
+      benefits_coverage_percent: number;
+    };
+  };
+  coaching: ScriptCoachingItem[];
+  score_adjustments: {
+    penalties: Array<{ item: string; points: number }>;
+    bonuses: Array<{ item: string; points: number }>;
+    total_penalty: number;
+    total_bonus: number;
+    net_adjustment: number;
+  };
+  summary: {
+    script_adherence_percent: number;
+    benefits_coverage_percent: number;
+    critical_issues: number;
+    high_issues: number;
+    medium_issues: number;
+    net_score_adjustment: number;
+  };
+};
+
 type Scores = {
   score: number;
   soa_mentioned: boolean;
@@ -34,6 +92,7 @@ type Scores = {
   welcome_packet_asked?: boolean;
   filler_density?: number;
   filler_penalty?: number;
+  filler_locations?: FillerLocation[];
 
   word_count: number;
   questions: number;
@@ -140,6 +199,7 @@ type UploadResult = {
   status: string;
   transcript: string;
   scores: Scores;
+  script_analysis?: ScriptAnalysis;
   diarization_enabled: boolean;
   diarization_error: string | null;
   talk_ratio: TalkRatio | null;
@@ -249,8 +309,6 @@ function formatClock(seconds: number): string {
 function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: ScoreFactor[] } {
   const factors: ScoreFactor[] = [];
 
-  // === TECHNIQUE BONUSES ===
-  
   const questions = scores.questions || 0;
   if (questions >= 8) {
     factors.push({ label: `Questions (${questions})`, impact: 5, type: "positive" });
@@ -280,8 +338,6 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
   } else if (energyOverall < 50) {
     factors.push({ label: `Low Energy (${energyOverall})`, impact: -5, type: "negative" });
   }
-
-  // === COMPLIANCE PENALTIES (expected items - only penalize if missing) ===
 
   if (!scores.soa_mentioned) {
     factors.push({ label: "SOA Missing", impact: -15, type: "negative" });
@@ -326,8 +382,6 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
   if (!scores.welcome_packet_asked) {
     factors.push({ label: "Welcome Packet Missing", impact: -5, type: "negative" });
   }
-
-  // === OTHER PENALTIES ===
 
   const fillerDensity = scores.filler_density || 0;
   if (fillerDensity >= 2) {
@@ -377,6 +431,7 @@ function exportToCSV(results: UploadResult[]) {
     "Rep Name",
     "Call Type",
     "Score",
+    "Script Adherence %",
     "SOA",
     "Benefits",
     "Intro",
@@ -397,6 +452,7 @@ function exportToCSV(results: UploadResult[]) {
     r.rep_name || "",
     r.call_type || "",
     r.scores.score,
+    r.script_analysis?.summary?.script_adherence_percent ?? "N/A",
     r.scores.soa_mentioned ? "Yes" : "No",
     r.scores.benefits_status,
     r.scores.intro?.status || "N/A",
@@ -424,7 +480,6 @@ function exportToCSV(results: UploadResult[]) {
 export default function Home() {
   const [mode, setMode] = useState<"single" | "batch">("single");
 
-  // Single upload state
   const [file, setFile] = useState<File | null>(null);
   const [repName, setRepName] = useState("");
   const [callType, setCallType] = useState("");
@@ -432,8 +487,9 @@ export default function Home() {
   const [result, setResult] = useState<UploadResult | null>(null);
   const [rawError, setRawError] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [showFillerLocations, setShowFillerLocations] = useState(false);
+  const [showScriptCoaching, setShowScriptCoaching] = useState(true);
 
-  // Batch upload state
   const [batchFiles, setBatchFiles] = useState<Array<{ file: File; repName: string; callType: string }>>([]);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -537,7 +593,6 @@ export default function Home() {
         } else {
           const { call_id } = await res.json();
 
-          // Poll for this file
           let attempts = 0;
           let done = false;
           while (attempts < 400 && !done) {
@@ -622,7 +677,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Mode Toggle */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         <button
           onClick={() => setMode("single")}
@@ -654,7 +708,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Single Upload Mode */}
       {mode === "single" && (
         <>
           <div
@@ -730,7 +783,6 @@ export default function Home() {
         </>
       )}
 
-      {/* Batch Upload Mode */}
       {mode === "batch" && (
         <div style={{ marginTop: 18 }}>
           <label
@@ -760,7 +812,6 @@ export default function Home() {
             <div style={{ fontSize: 12, color: "#666" }}>Supports .mp3, .wav, .m4a, .ogg</div>
           </label>
 
-          {/* File List with Editable Fields */}
           {batchFiles.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -885,7 +936,6 @@ export default function Home() {
             {isProcessing ? "Processing..." : `Process ${batchFiles.length} Files`}
           </button>
 
-          {/* Progress */}
           {batchStatus && (
             <div style={{ marginTop: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -908,7 +958,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Results Table */}
           {batchStatus && batchStatus.results.length > 0 && (
             <div style={{ marginTop: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -937,6 +986,7 @@ export default function Home() {
                       <th style={{ padding: 10, textAlign: "left" }}>File</th>
                       <th style={{ padding: 10, textAlign: "left" }}>Rep</th>
                       <th style={{ padding: 10, textAlign: "center" }}>Score</th>
+                      <th style={{ padding: 10, textAlign: "center" }}>Script %</th>
                       <th style={{ padding: 10, textAlign: "center" }}>SOA</th>
                       <th style={{ padding: 10, textAlign: "center" }}>Benefits</th>
                       <th style={{ padding: 10, textAlign: "center" }}>Intro</th>
@@ -962,6 +1012,9 @@ export default function Home() {
                             label={String(r.scores.score)}
                             variant={r.scores.score >= 80 ? "good" : r.scores.score >= 60 ? "warn" : "bad"}
                           />
+                        </td>
+                        <td style={{ padding: 10, textAlign: "center" }}>
+                          {r.script_analysis?.summary?.script_adherence_percent ?? "—"}%
                         </td>
                         <td style={{ padding: 10, textAlign: "center" }}>
                           <Badge label={r.scores.soa_mentioned ? "✓" : "✗"} variant={r.scores.soa_mentioned ? "good" : "bad"} />
@@ -1011,7 +1064,6 @@ export default function Home() {
                 </table>
               </div>
 
-              {/* Errors */}
               {batchStatus.errors.length > 0 && (
                 <div style={{ marginTop: 16, padding: 12, background: "#ffecec", borderRadius: 8 }}>
                   <strong style={{ color: "#c00" }}>Errors ({batchStatus.errors.length}):</strong>
@@ -1029,7 +1081,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Results Detail View */}
       {displayResult && (
         <div style={{ marginTop: 22, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           {selectedResult && (
@@ -1127,6 +1178,144 @@ export default function Home() {
               📄 Download PDF Scorecard
             </button>
           </Card>
+
+          {/* NEW: Script Adherence Summary */}
+          {displayResult.script_analysis?.summary && (
+            <Card title="Script Adherence">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 8, textAlign: "center" }}>
+                  <div style={{ 
+                    fontSize: 32, 
+                    fontWeight: 700, 
+                    color: displayResult.script_analysis.summary.script_adherence_percent >= 80 ? "#22c55e" : displayResult.script_analysis.summary.script_adherence_percent >= 60 ? "#eab308" : "#ef4444" 
+                  }}>
+                    {displayResult.script_analysis.summary.script_adherence_percent}%
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666" }}>Script Adherence</div>
+                </div>
+                <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 8, textAlign: "center" }}>
+                  <div style={{ 
+                    fontSize: 32, 
+                    fontWeight: 700, 
+                    color: displayResult.script_analysis.summary.benefits_coverage_percent >= 80 ? "#22c55e" : displayResult.script_analysis.summary.benefits_coverage_percent >= 60 ? "#eab308" : "#ef4444" 
+                  }}>
+                    {displayResult.script_analysis.summary.benefits_coverage_percent}%
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666" }}>Benefits Coverage</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 12 }}>
+                {displayResult.script_analysis.summary.critical_issues > 0 && (
+                  <span style={{ padding: "4px 10px", background: "#dc2626", color: "white", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                    {displayResult.script_analysis.summary.critical_issues} Critical
+                  </span>
+                )}
+                {displayResult.script_analysis.summary.high_issues > 0 && (
+                  <span style={{ padding: "4px 10px", background: "#f97316", color: "white", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                    {displayResult.script_analysis.summary.high_issues} High
+                  </span>
+                )}
+                {displayResult.script_analysis.summary.medium_issues > 0 && (
+                  <span style={{ padding: "4px 10px", background: "#6b7280", color: "white", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>
+                    {displayResult.script_analysis.summary.medium_issues} Medium
+                  </span>
+                )}
+              </div>
+              <div style={{ textAlign: "center", fontSize: 13, padding: 8, background: displayResult.script_analysis.summary.net_score_adjustment >= 0 ? "#eaffea" : "#ffecec", borderRadius: 8 }}>
+                <strong>Score Impact:</strong>{" "}
+                <span style={{ color: displayResult.script_analysis.summary.net_score_adjustment >= 0 ? "#22c55e" : "#ef4444", fontWeight: 700 }}>
+                  {displayResult.script_analysis.summary.net_score_adjustment >= 0 ? "+" : ""}{displayResult.script_analysis.summary.net_score_adjustment}
+                </span>
+              </div>
+            </Card>
+          )}
+
+          {/* NEW: Script Coaching - Expected vs Actual */}
+          {displayResult.script_analysis?.coaching && displayResult.script_analysis.coaching.length > 0 && (
+            <Card title="Script Coaching - Expected vs Actual">
+              <button
+                onClick={() => setShowScriptCoaching(!showScriptCoaching)}
+                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", background: "white", fontWeight: 700, cursor: "pointer", marginBottom: 12, fontSize: 12 }}
+              >
+                {showScriptCoaching ? "Hide Details" : "Show Details"}
+              </button>
+              {showScriptCoaching && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 500, overflowY: "auto" }}>
+                  {displayResult.script_analysis.coaching.map((item, idx) => (
+                    <div 
+                      key={idx} 
+                      style={{ 
+                        padding: 14, 
+                        background: item.priority === "critical" ? "#fef2f2" : item.priority === "high" ? "#fff7ed" : "#f9fafb",
+                        borderRadius: 10,
+                        borderLeft: `4px solid ${item.priority === "critical" ? "#dc2626" : item.priority === "high" ? "#f97316" : "#6b7280"}`
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: "#333" }}>{item.category}</span>
+                        <span style={{ 
+                          fontSize: 10, padding: "3px 8px", borderRadius: 4,
+                          background: item.priority === "critical" ? "#dc2626" : item.priority === "high" ? "#f97316" : "#6b7280",
+                          color: "white", fontWeight: 600, textTransform: "uppercase"
+                        }}>{item.priority}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#333", marginBottom: 8 }}><strong>Issue:</strong> {item.issue}</div>
+                      <div style={{ fontSize: 11, color: "#059669", marginBottom: 6, padding: 8, background: "#ecfdf5", borderRadius: 6 }}>
+                        <strong>✓ Expected:</strong> <span style={{ fontStyle: "italic" }}>"{item.expected}"</span>
+                      </div>
+                      {item.agent_said && item.agent_said !== "Not mentioned" && item.agent_said !== "N/A" ? (
+                        <div style={{ fontSize: 11, color: "#dc2626", padding: 8, background: "#fef2f2", borderRadius: 6 }}>
+                          <strong>✗ Agent said:</strong> <span style={{ fontStyle: "italic" }}>"{item.agent_said}"</span>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: "#6b7280", padding: 8, background: "#f3f4f6", borderRadius: 6 }}>
+                          <strong>✗ Agent said:</strong> <em>Not mentioned</em>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* NEW: Benefits Coverage Detail */}
+          {displayResult.script_analysis?.comparison?.benefits && (
+            <Card title="Benefits Review Detail">
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 600 }}>Coverage Status</span>
+                  <span style={{ 
+                    padding: "4px 12px", borderRadius: 8, fontWeight: 600, fontSize: 12,
+                    background: displayResult.script_analysis.comparison.benefits.status === "full" ? "#dcfce7" : displayResult.script_analysis.comparison.benefits.status === "partial" ? "#fef3c7" : "#fee2e2",
+                    color: displayResult.script_analysis.comparison.benefits.status === "full" ? "#166534" : displayResult.script_analysis.comparison.benefits.status === "partial" ? "#92400e" : "#991b1b"
+                  }}>
+                    {displayResult.script_analysis.comparison.benefits.status.toUpperCase()} ({displayResult.script_analysis.comparison.benefits.covered_count}/{displayResult.script_analysis.comparison.benefits.total_count})
+                  </span>
+                </div>
+              </div>
+              {displayResult.script_analysis.comparison.benefits.missed.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#991b1b", marginBottom: 6 }}>❌ Missing:</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {displayResult.script_analysis.comparison.benefits.missed.map((b, i) => (
+                      <span key={i} style={{ padding: "4px 8px", background: "#fee2e2", color: "#991b1b", borderRadius: 4, fontSize: 11 }}>{b}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {displayResult.script_analysis.comparison.benefits.covered.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>✓ Covered:</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {displayResult.script_analysis.comparison.benefits.covered.map((b, i) => (
+                      <span key={i} style={{ padding: "4px 8px", background: "#dcfce7", color: "#166534", borderRadius: 4, fontSize: 11 }}>{b}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* Talk Ratio */}
           {displayResult.diarization_enabled && displayResult.talk_ratio ? (
@@ -1417,15 +1606,10 @@ export default function Home() {
               )}
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>Referral Ask</span>
-                <Badge label={displayResult.scores.referral_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.referral_asked ? "good" : "neutral"} />
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Pen and Paper</span>
+                <Badge label={displayResult.scores.pen_paper_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.pen_paper_asked ? "good" : "bad"} />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>Review Request</span>
-                <Badge label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.review_requested ? "good" : "neutral"} />
-              </div>
-            
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Medicare Card Script</span>
                 <Badge label={displayResult.scores.medicare_card_script ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.medicare_card_script ? "good" : "bad"} />
@@ -1440,21 +1624,82 @@ export default function Home() {
                 <span style={{ fontWeight: 700, fontSize: 13 }}>Welcome Packet</span>
                 <Badge label={displayResult.scores.welcome_packet_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.welcome_packet_asked ? "good" : "bad"} />
               </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Referral Ask</span>
+                <Badge label={displayResult.scores.referral_asked ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.referral_asked ? "good" : "neutral"} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, background: "#f9f9f9", borderRadius: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>Review Request</span>
+                <Badge label={displayResult.scores.review_requested ? "ASKED" : "NOT ASKED"} variant={displayResult.scores.review_requested ? "good" : "neutral"} />
+              </div>
             </div>
           </Card>
 
-          {/* Filler Words Summary */}
-          <Card title="Filler Words Summary">
-            {displayResult.scores.top_fillers && displayResult.scores.top_fillers.length > 0 ? (
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
-                {displayResult.scores.top_fillers.map(([w, n]) => (
-                  <li key={w} style={{ marginBottom: 6 }}>
-                    <strong>{w}</strong>: {n}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div style={{ color: "#666", fontSize: 13 }}>No fillers detected.</div>
+          {/* NEW: Enhanced Filler Words with Locations */}
+          <Card title="Filler Words">
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 32, fontWeight: 700 }}>{displayResult.scores.filler_total}</span>
+                <div>
+                  <div style={{ fontSize: 12, color: "#666" }}>Total Fillers</div>
+                  <Badge 
+                    label={`${displayResult.scores.filler_density || 0}% density`} 
+                    variant={(displayResult.scores.filler_density || 0) >= 2 ? "bad" : (displayResult.scores.filler_density || 0) >= 1 ? "warn" : "good"} 
+                  />
+                </div>
+              </div>
+              {displayResult.scores.top_fillers && displayResult.scores.top_fillers.length > 0 && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  {displayResult.scores.top_fillers.map(([word, count]) => (
+                    <span key={word} style={{ padding: "4px 10px", background: "#fff6e5", borderRadius: 6, fontSize: 12 }}>
+                      <strong>{word}</strong>: {count}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            {displayResult.scores.filler_locations && displayResult.scores.filler_locations.length > 0 && (
+              <>
+                <button
+                  onClick={() => setShowFillerLocations(!showFillerLocations)}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", background: "white", fontWeight: 700, cursor: "pointer", fontSize: 12 }}
+                >
+                  {showFillerLocations ? "Hide Locations" : `Show ${displayResult.scores.filler_locations.length} Locations`}
+                </button>
+                {showFillerLocations && (
+                  <div style={{ marginTop: 12, maxHeight: 300, overflowY: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: "#f5f5f5" }}>
+                          <th style={{ padding: 8, textAlign: "left" }}>Time</th>
+                          <th style={{ padding: 8, textAlign: "left" }}>Filler</th>
+                          <th style={{ padding: 8, textAlign: "left" }}>Context</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayResult.scores.filler_locations.map((fl, idx) => (
+                          <tr key={idx} style={{ borderBottom: "1px solid #eee", background: fl.is_always_filler ? "#fff6e5" : "white" }}>
+                            <td style={{ padding: 8, fontFamily: "monospace", fontWeight: 600 }}>{fl.timestamp_formatted}</td>
+                            <td style={{ padding: 8 }}>
+                              <span style={{ 
+                                padding: "2px 6px", 
+                                background: fl.is_always_filler ? "#f97316" : "#eab308", 
+                                color: "white", borderRadius: 4, fontWeight: 700, textTransform: "uppercase", fontSize: 10 
+                              }}>{fl.filler}</span>
+                            </td>
+                            <td style={{ padding: 8, color: "#666" }}>{fl.context}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+            {(!displayResult.scores.filler_locations || displayResult.scores.filler_locations.length === 0) && displayResult.scores.filler_total === 0 && (
+              <div style={{ color: "#666", fontSize: 13 }}>✓ No fillers detected</div>
             )}
           </Card>
 
