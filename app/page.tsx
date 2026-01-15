@@ -349,10 +349,10 @@ function calculateScoreFactors(scores: Scores): { top: ScoreFactor[]; bottom: Sc
     factors.push({ label: "Missing Intro", impact: -10, type: "negative" });
   }
 
-  if (scores.benefits_status === "partial") {
-    factors.push({ label: "Partial Benefits Review", impact: -8, type: "negative" });
-  } else if (scores.benefits_status === "none") {
-    factors.push({ label: "No Benefits Review", impact: -15, type: "negative" });
+  const benefitsMissed = scores.benefit_terms_missing?.length || 0;
+  if (benefitsMissed > 0) {
+    const penalty = Math.min(5, benefitsMissed);
+    factors.push({ label: `Benefits Missing (${benefitsMissed})`, impact: -penalty, type: "negative" });
   }
 
   if (!scores.healthcare_decisions_asked) {
